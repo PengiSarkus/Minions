@@ -1,0 +1,4 @@
+name: Minions
+version: '${project.version}'
+main: com.sarkus.minions.Minions
+api-version: '1.21'
