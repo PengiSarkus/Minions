@@ -8,7 +8,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.Location;
 
 
-
 import java.util.Random;
 
 public class FarmingBlock {
@@ -29,6 +28,7 @@ public class FarmingBlock {
             for (int z = -1; z<=1; z++){
                 Location soilLocation = center.clone().add(x, 0, z);
                 Block soil = world.getBlockAt(soilLocation);
+                if (soilLocation.equals(center)) continue;
                 if (!(soil.getType() == Material.FARMLAND)){
                     soil.setType(Material.FARMLAND);
                 }
@@ -40,24 +40,22 @@ public class FarmingBlock {
                 }
                 else{
                     crop.setType(cropType);
-                    Block a = world.getBlockAt(cropLocation);
-                    if (a.getBlockData() instanceof Ageable ageable){
-                        ageable.setAge(7);
-                    }
                 }
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     Block b = world.getBlockAt(cropLocation);
                     BlockData blockData = b.getBlockData();
 
-                    if (blockData instanceof Ageable ageable) {
-                        // Fully grow the crop by setting it to the maximum growth stage
-                        ageable.setAge(7);
-                        // Log the crop growth stage for debugging
-                        Bukkit.getLogger().info("Crop age set to: " + ageable.getAge());
+                    if (blockData instanceof org.bukkit.block.data.Ageable) {
+                        org.bukkit.block.data.Ageable ageable = (org.bukkit.block.data.Ageable) blockData;
+                        ageable.setAge(7); // Max age for wheat
+                        b.setBlockData(ageable);
+
+                        Bukkit.getLogger().info("Crop (" + b.getType() + ") age set to: " + ageable.getAge());
+
                     } else {
-                        Bukkit.getLogger().warning("The block is not a crop: " + crop.getType());
+                        Bukkit.getLogger().warning("The block is not Ageable: " + b.getType());
                     }
-                }, 20L);  // 60 tick + 0-39 random tick arası
+                }, 20L);
 
 
             }
