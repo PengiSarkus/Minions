@@ -17,11 +17,15 @@ public class BlockPlaceListener implements Listener {
     public void onBlockPlace(BlockPlaceEvent event) {
         ItemStack item = event.getItemInHand();
         if (!(item.hasItemMeta())) return;
-        if (!item.getItemMeta().getDisplayName().equalsIgnoreCase("Tarım")) return;
+        if (!item.getItemMeta().getDisplayName().startsWith("Farmer")) return;
         Location loc = event.getBlockPlaced().getLocation();
         Player player = event.getPlayer();
-        FarmingBlock farmingBlock = new FarmingBlock(loc, player, Material.WHEAT,plugin);
-        farmingBlock.onPlace();// Havuç ekili
+        if(item.getItemMeta().getDisplayName().equals("FarmerSeviye1")) {
+        FarmingBlock farmingBlock = new FarmingBlock(loc, player,1, Material.WHEAT,plugin);
+        farmingBlock.onPlace();}
+        if(item.getItemMeta().getDisplayName().equals("FarmerSeviye2")) {
+            FarmingBlock farmingBlock = new FarmingBlock(loc, player,2, Material.WHEAT,plugin);
+            farmingBlock.onPlace();}
 
 
 
