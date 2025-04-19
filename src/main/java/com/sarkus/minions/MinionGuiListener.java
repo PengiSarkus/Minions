@@ -1,6 +1,8 @@
 package com.sarkus.minions;
 
-import org.bukkit.*;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -42,32 +44,40 @@ public class MinionGuiListener implements Listener {
         FarmingBlock farmingBlock = holder.getFarmingBlock();
 
         String viewTitle = view.getTitle();
+        String rawTitle = ChatColor.stripColor(viewTitle);
 
-        if (viewTitle.equals(ChatColor.GREEN + "Minion Kontrol Paneli")) {
+
+        if (rawTitle.equals("Minion Kontrol Paneli")) {
 
             event.setCancelled(true);
 
             if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
-            if (clickedItem.getType() == Material.CHEST && rawSlot == 2) {
+            if (rawSlot == 2 && clickedItem.getType() == Material.CHEST) {
                 farmingBlock.openStorageMenu(player);
-            } else if (clickedItem.getType() == Material.WHEAT_SEEDS && rawSlot == 4) {
+            } else if (rawSlot == 4 && (clickedItem.getType() == Material.WHEAT_SEEDS || clickedItem.getType() == Material.WHEAT || clickedItem.getType() == Material.CARROT || clickedItem.getType() == Material.POTATO || clickedItem.getType() == Material.BEETROOT_SEEDS || clickedItem.getType() == Material.NETHER_WART)) {
                 farmingBlock.openCropSelectionMenu(player);
-            } else if (clickedItem.getType() == Material.BARRIER && rawSlot == 6) {
+            } else if (rawSlot == 6 && clickedItem.getType() == Material.BARRIER) {
                 player.closeInventory();
                 farmingBlock.breakMinion(player);
             }
 
 
-        } else if (viewTitle.equals(ChatColor.AQUA + "Ekin Türü Seç")) {
+        } else if (rawTitle.equals("Ekin Türü Seç")) {
             event.setCancelled(true);
 
-            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) {
+                return;
+            }
 
             Material selectedCropItem = null;
-            if (rawSlot == 3 && clickedItem.getType() == Material.WHEAT) { selectedCropItem = Material.WHEAT; }
-            else if (rawSlot == 4 && clickedItem.getType() == Material.CARROT) { selectedCropItem = Material.CARROT; }
-            else if (rawSlot == 5 && clickedItem.getType() == Material.POTATO) { selectedCropItem = Material.POTATO; }
+            if (rawSlot == 3 && clickedItem.getType() == Material.WHEAT) {
+                selectedCropItem = Material.WHEAT;
+            } else if (rawSlot == 4 && clickedItem.getType() == Material.CARROT) {
+                selectedCropItem = Material.CARROT;
+            } else if (rawSlot == 5 && clickedItem.getType() == Material.POTATO) {
+                selectedCropItem = Material.POTATO;
+            }
 
 
             if (selectedCropItem != null) {
@@ -75,41 +85,34 @@ public class MinionGuiListener implements Listener {
                 player.closeInventory();
             }
 
-        } else if (viewTitle.equals(ChatColor.YELLOW + "Hasatlar Deposu")) {
+
+        } else if (rawTitle.equals("Hasatlar Deposu")) {
             if (event.getClickedInventory() != null && event.getClickedInventory().getHolder() instanceof MinionInventoryHolder) {
 
                 InventoryAction action = event.getAction();
                 ClickType click = event.getClick();
 
-
                 boolean isTakingAction = (action == InventoryAction.PICKUP_ALL || action == InventoryAction.PICKUP_HALF ||
                         action == InventoryAction.PICKUP_ONE || action == InventoryAction.PICKUP_SOME ||
-                        action == InventoryAction.COLLECT_TO_CURSOR || action == InventoryAction.MOVE_TO_OTHER_INVENTORY); // MOVE_TO_OTHER_INVENTORY is shift-click
+                        action == InventoryAction.COLLECT_TO_CURSOR);
+
+                boolean isTakingClick = (click == ClickType.LEFT || click == ClickType.RIGHT || click == ClickType.DOUBLE_CLICK);
+
+                boolean isShiftClickToPlayer = (action == InventoryAction.MOVE_TO_OTHER_INVENTORY && event.getClickedInventory().equals(clickedInv));
 
 
-                boolean isTakingClick = (click == ClickType.LEFT || click == ClickType.RIGHT ||
-                        click == ClickType.SHIFT_LEFT || click == ClickType.SHIFT_RIGHT ||
-                        click == ClickType.DOUBLE_CLICK);
-
-
-                if (isTakingAction && isTakingClick) {
+                if ( (isTakingAction && isTakingClick) || isShiftClickToPlayer) {
                     event.setCancelled(false);
 
-
-
                 } else {
-
                     event.setCancelled(true);
-
                 }
 
             } else {
-
-                event.setCancelled(true);
+                event.setCancelled(false);
             }
 
         } else {
-
             event.setCancelled(true);
             plugin.getLogger().warning("Cancelled click in unknown MinionInventory title: " + viewTitle);
         }
@@ -123,10 +126,26 @@ public class MinionGuiListener implements Listener {
             return;
         }
 
+        String viewTitle = event.getView().getTitle();
+        String rawTitle = ChatColor.stripColor(viewTitle);
 
-        event.setCancelled(false);
 
+        if (rawTitle.equals("Minion Kontrol Paneli") || rawTitle.equals("Ekin Türü Seç")) {
+            event.setCancelled(true);
+        }
+        else if (rawTitle.equals("Hasatlar Deposu")) {
+            boolean draggingIntoStorage = event.getNewItems().keySet().stream()
+                    .anyMatch(rawSlot -> event.getView().getInventory(rawSlot).getHolder() instanceof MinionInventoryHolder);
 
+            if (draggingIntoStorage) {
+                event.setCancelled(true);
+            } else {
+                event.setCancelled(false);
+            }
+        } else {
+            event.setCancelled(true);
+            plugin.getLogger().warning("Cancelled drag event in unknown MinionInventory title: " + viewTitle);
+        }
     }
 
     @EventHandler

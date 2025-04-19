@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
-import org.bukkit.inventory.Inventory; // Import Inventory
+import org.bukkit.inventory.Inventory;
 
 public final class Minions extends JavaPlugin {
     private final List<FarmingBlock> activeFarmingBlocks = new ArrayList<>();
@@ -80,6 +80,17 @@ public final class Minions extends JavaPlugin {
         recipeWheatLevelTwo.setIngredient('D', Material.DIAMOND_BLOCK);
         recipeWheatLevelTwo.setIngredient('F', wheatLevelOneItemStack);
         getServer().addRecipe(recipeWheatLevelTwo);
+
+        ItemStack wheatLevelThreeItemStack = new ItemStack(Material.END_STONE);
+        ItemMeta wheatLevelThreeItemStackItemMeta = wheatLevelThreeItemStack.getItemMeta();
+        wheatLevelThreeItemStackItemMeta.setDisplayName("FarmerSeviye3");
+        wheatLevelThreeItemStackItemMeta.addEnchant(Enchantment.UNBREAKING,2,true);
+        wheatLevelThreeItemStack.setItemMeta(wheatLevelThreeItemStackItemMeta);
+        ShapedRecipe recipeWheatLevelThree = new ShapedRecipe(new NamespacedKey(this, "farmer_level_3"), wheatLevelThreeItemStack);
+        recipeWheatLevelThree.shape("DDD", "DFD", "DDD");
+        recipeWheatLevelThree.setIngredient('D', Material.DIAMOND_BLOCK);
+        recipeWheatLevelThree.setIngredient('F', wheatLevelTwoItemStack);
+        getServer().addRecipe(recipeWheatLevelThree);
     }
 
     public void saveFarmingBlocks() {
@@ -112,22 +123,18 @@ public final class Minions extends JavaPlugin {
 
         try {
             config.save(file);
-            getLogger().log(Level.INFO, "Saved " + i + " farming blocks.");
         } catch (IOException e) {
-            getLogger().log(Level.SEVERE, "Could not save farming blocks!", e);
         }
     }
     public void loadFarmingBlocks() {
         File file = new File(getDataFolder(), "farming_blocks.yml");
         if (!file.exists()) {
-            getLogger().log(Level.INFO, "No farming_blocks.yml found, skipping load.");
             return;
         }
 
         FileConfiguration config = YamlConfiguration.loadConfiguration(file);
         ConfigurationSection blocks = config.getConfigurationSection("blocks");
         if (blocks == null) {
-            getLogger().log(Level.INFO, "No 'blocks' section in farming_blocks.yml, skipping load.");
             return;
         }
 
@@ -154,18 +161,15 @@ public final class Minions extends JavaPlugin {
                 }
 
             } catch (IllegalArgumentException e) {
-                getLogger().warning("Failed to parse or map crop material '" + itemMaterialName + "' from config for block at " + world.getName() + "," + x + "," + y + "," + z + ". Skipping load.");
                 continue;
             }
 
             Player owner = Bukkit.getOfflinePlayer(ownerUUID).getPlayer();
 
             if (world == null) {
-                getLogger().warning("Failed to load farming block at " + config.getString(path + ".world") + "," + x + "," + y + "," + z + " - World not found. Skipping.");
                 continue;
             }
             if (owner == null) {
-                getLogger().warning("Farming block owner (UUID: " + ownerUUID + ") for block at " + world.getName() + "," + x + "," + y + "," + z + " is offline. Block will be loaded.");
             }
 
             FarmingBlock block = new FarmingBlock(new Location(world, x, y, z), owner, level, cropBlockType, this);
@@ -176,14 +180,11 @@ public final class Minions extends JavaPlugin {
                 try {
                     block.getStorageInventory().setContents(contents);
                 } catch (IllegalArgumentException e) {
-                    getLogger().warning("Failed to load inventory contents for block at " + world.getName() + "," + x + "," + y + "," + z + ". Inventory size mismatch? Error: " + e.getMessage());
                 }
             }
-            //
 
             block.restore();
             loadedCount++;
         }
-        getLogger().log(Level.INFO, "Loaded " + loadedCount + " farming blocks.");
     }
 }

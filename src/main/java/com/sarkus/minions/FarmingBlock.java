@@ -18,6 +18,7 @@ import java.util.Random;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Collection;
+import java.util.UUID;
 
 public class FarmingBlock {
     private Inventory storageInventory;
@@ -35,8 +36,6 @@ public class FarmingBlock {
         ITEM_TO_BLOCK_MAP.put(Material.WHEAT, Material.WHEAT);
         ITEM_TO_BLOCK_MAP.put(Material.CARROT, Material.CARROTS);
         ITEM_TO_BLOCK_MAP.put(Material.POTATO, Material.POTATOES);
-        ITEM_TO_BLOCK_MAP.put(Material.BEETROOT_SEEDS, Material.BEETROOTS);
-        ITEM_TO_BLOCK_MAP.put(Material.NETHER_WART, Material.NETHER_WART);
     }
 
     public static final Map<Material, Material> BLOCK_TO_ITEM_MAP = new HashMap<>();
@@ -44,8 +43,6 @@ public class FarmingBlock {
         BLOCK_TO_ITEM_MAP.put(Material.WHEAT, Material.WHEAT);
         BLOCK_TO_ITEM_MAP.put(Material.CARROTS, Material.CARROT);
         BLOCK_TO_ITEM_MAP.put(Material.POTATOES, Material.POTATO);
-        BLOCK_TO_ITEM_MAP.put(Material.BEETROOTS, Material.BEETROOT_SEEDS);
-        BLOCK_TO_ITEM_MAP.put(Material.NETHER_WART, Material.NETHER_WART);
     }
 
 
@@ -53,15 +50,27 @@ public class FarmingBlock {
         this.center = center;
         this.owner = owner;
         this.level = level;
-        if (BLOCK_TO_ITEM_MAP.containsKey(cropTypeBlock)) {
+        if (BLOCK_TO_ITEM_MAP.containsKey(cropTypeBlock) && cropTypeBlock.isBlock()) {
             this.cropType = cropTypeBlock;
         } else {
-            plugin.getLogger().warning("FarmingBlock created with invalid block type: " + cropTypeBlock + ". Defaulting to WHEAT.");
             this.cropType = Material.WHEAT;
         }
         this.plugin = plugin;
         this.storageInventory = Bukkit.createInventory(new MinionInventoryHolder(this), 54, ChatColor.YELLOW + "Hasatlar Deposu");
     }
+    public FarmingBlock(Location center, UUID ownerUUID, int level, Material cropTypeBlock, Inventory storageInventory, Minions plugin) {
+        this.center = center;
+        this.owner = Bukkit.getOfflinePlayer(ownerUUID).getPlayer();
+        this.level = level;
+        if (BLOCK_TO_ITEM_MAP.containsKey(cropTypeBlock) && cropTypeBlock.isBlock()) {
+            this.cropType = cropTypeBlock;
+        } else {
+            this.cropType = Material.WHEAT;
+        }
+        this.plugin = plugin;
+        this.storageInventory = storageInventory;
+    }
+
 
     public int getLevel() {
         return level;
@@ -70,6 +79,11 @@ public class FarmingBlock {
     public Player getOwner() {
         return owner;
     }
+
+    public UUID getOwnerUUID() {
+        return owner != null ? owner.getUniqueId() : null;
+    }
+
 
     public Material getCropType() {
         return cropType;
@@ -84,6 +98,11 @@ public class FarmingBlock {
     }
 
     public void breakMinion(Player breaker) {
+        if (owner != null && !breaker.getUniqueId().equals(owner.getUniqueId())) {
+            breaker.sendMessage(ChatColor.RED + "Bu farm bloğunu yalnızca sahibi kırabilir.");
+            return;
+        }
+
         cancelGrowthTasks();
 
         plugin.removeFarmingBlock(this);
@@ -97,6 +116,9 @@ public class FarmingBlock {
         } else if (this.level == 2) {
             meta.setDisplayName("FarmerSeviye2");
             meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+        } else if (this.level == 3) {
+            meta.setDisplayName("FarmerSeviye3");
+            meta.addEnchant(Enchantment.UNBREAKING, 2, true);
         }
         minionItem.setItemMeta(meta);
 
@@ -110,11 +132,35 @@ public class FarmingBlock {
         }
 
         breaker.sendMessage(ChatColor.GREEN + "Farm bloğu başarıyla kaldırıldı!");
+
+        int range = (level == 3) ? 2 : 1;
+        World world = center.getWorld();
+        if (world != null) {
+            for (int x = -range; x <= range; x++) {
+                for (int z = -range; z <= range; z++) {
+                    if (x == 0 && z == 0) continue;
+                    Location blockLoc = center.clone().add(x, 0, z);
+                    Location cropLoc = center.clone().add(x, 1, z);
+
+                    Block farmLandBlock = world.getBlockAt(blockLoc);
+                    Block cropBlock = world.getBlockAt(cropLoc);
+
+                    if (farmLandBlock.getType() == Material.FARMLAND) {
+                        farmLandBlock.setType(Material.DIRT);
+                    }
+                    if (BLOCK_TO_ITEM_MAP.containsKey(cropBlock.getType())) {
+                        cropBlock.breakNaturally();
+                    }
+                }
+            }
+        }
     }
 
+
     private void cancelGrowthTasks() {
-        for (BukkitTask task : growthTasks.values()) {
-            if (task != null) {
+        for (Location loc : new HashMap<>(growthTasks).keySet()) {
+            BukkitTask task = growthTasks.remove(loc);
+            if (task != null && !task.isCancelled()) {
                 task.cancel();
             }
         }
@@ -130,72 +176,103 @@ public class FarmingBlock {
             return;
         }
 
+        if (!newCropBlockType.isBlock() || !BLOCK_TO_ITEM_MAP.containsKey(newCropBlockType)) {
+            changer.sendMessage(ChatColor.RED + "Geçersiz ekin türü seçildi! (Bu blok türü ekim için uygun değil.)");
+            return;
+        }
+
+
         if (this.cropType == newCropBlockType) {
-            changer.sendMessage(ChatColor.YELLOW + "Ekin zaten " + selectedItemMaterial.name().replace("_SEEDS", "").toLowerCase().replace("_WART", " Wart") + " olarak ayarlı.");
+            changer.sendMessage(ChatColor.YELLOW + "Ekin zaten " + selectedItemMaterial.name().replace("_SEEDS", "").toLowerCase().replace("_WART", " Wart").replace("_BLOCK", "") + " olarak ayarlı.");
             return;
         }
 
         cancelGrowthTasks();
+
         this.cropType = newCropBlockType;
-        changer.sendMessage(ChatColor.GREEN + "Ekin türü " + selectedItemMaterial.name().replace("_SEEDS", "").toLowerCase().replace("_WART", " Wart") + " olarak değiştirildi!");
+        changer.sendMessage(ChatColor.GREEN + "Ekin türü " + selectedItemMaterial.name().replace("_SEEDS", "").toLowerCase().replace("_WART", " Wart").replace("_BLOCK", "") + " olarak değiştirildi!");
 
         World world = center.getWorld();
         if (world == null) return;
 
-        for (int x = -1; x <= 1; x++) {
-            for (int z = -1; z <= 1; z++) {
+        int range = (level == 3) ? 2 : 1;
+        for (int x = -range; x <= range; x++) {
+            for (int z = -range; z <= range; z++) {
                 if (x == 0 && z == 0) continue;
+
                 Location cropLocation = center.clone().add(x, 1, z);
                 Block cropBlock = world.getBlockAt(cropLocation);
+                Location soilLocation = center.clone().add(x, 0, z);
+                Block soilBlock = world.getBlockAt(soilLocation);
 
-                if (cropBlock.getType() == Material.AIR || BLOCK_TO_ITEM_MAP.containsKey(cropBlock.getType())) {
-                    cropBlock.setType(newCropBlockType);
-                    BlockData bd = cropBlock.getBlockData();
-                    if (bd instanceof Ageable) {
-                        Ageable ageable = (Ageable) bd;
-                        ageable.setAge(0);
-                        cropBlock.setBlockData(ageable, true);
-                    }
-                } else {
-                    plugin.getLogger().warning("Minion at " + center + " found unexpected block type " + cropBlock.getType() + " at crop location " + cropLocation + " when changing crop type. Expected a crop block or AIR.");
+                if (soilBlock.getType() != Material.FARMLAND) {
+                    soilBlock.setType(Material.FARMLAND);
                 }
-                long delay = (level == 1) ? 10L : 5L;
+                cropBlock.setType(newCropBlockType);
+                BlockData bd = cropBlock.getBlockData();
+                if (bd instanceof Ageable) {
+                    Ageable ageable = (Ageable) bd;
+                    ageable.setAge(0);
+                    cropBlock.setBlockData(ageable, true);
+                }
+                // Use the delay based on the minion's level
+                long delay = (level == 1) ? 2600L : 1700L;
                 startGrowth(cropLocation, delay);
             }
         }
     }
 
-
     public void onPlace() {
         long delay;
         if (level == 1) {
-            delay = 10L;
+            delay = 1700L;
         } else {
-            delay = 5L;
+            delay = 1100L;
         }
         World world = center.getWorld();
         if (world == null) return;
 
         cancelGrowthTasks();
 
-        for (int x = -1; x<=1; x++){
-            for (int z = -1; z<=1; z++){
+        int range = (level == 3) ? 2 : 1;
+
+        boolean canPlace = true;
+        for (int x = -range; x <= range; x++) {
+            for (int z = -range; z <= range; z++) {
+                if (x == 0 && z == 0) continue;
+
+                Location cropLocation = center.clone().add(x, 1, z);
+                Block crop = world.getBlockAt(cropLocation);
+
+                if (crop.getType() != Material.AIR) {
+                    Player currentOwner = getOwner();
+                    if (currentOwner != null && currentOwner.isOnline()) {
+                        currentOwner.sendMessage(ChatColor.RED + "Farm bloğunun etrafındaki alan boş olmalı!");
+                    }
+                    canPlace = false;
+                    break;
+                }
+            }
+            if (!canPlace) break;
+        }
+
+        if (!canPlace) {
+            center.getBlock().setType(Material.AIR);
+            return;
+        }
+        for (int x = -range; x <= range; x++) {
+            for (int z = -range; z <= range; z++) {
+                if (x == 0 && z == 0) continue;
+
                 Location soilLocation = center.clone().add(x, 0, z);
                 Block soil = world.getBlockAt(soilLocation);
-                if (soilLocation.equals(center)) continue;
-                if (!(soil.getType() == Material.FARMLAND)){
-                    soil.setType(Material.FARMLAND);
-                }
                 Location cropLocation = soilLocation.clone().add(0, 1, 0);
                 Block crop = world.getBlockAt(cropLocation);
-                if (!(crop.getType() == Material.AIR)){
-                    Player currentOwner = getOwner();
-                    if(currentOwner != null && currentOwner.isOnline()) {
-                        currentOwner.sendMessage(ChatColor.RED + "Üzeri Boş Olmalı");
-                    }
-                    return;
+
+                if (soil.getType() != Material.FARMLAND) {
+                    soil.setType(Material.FARMLAND);
                 }
-                else{
+                if (crop.getType() == Material.AIR) {
                     crop.setType(cropType);
                     BlockData bd = crop.getBlockData();
                     if (bd instanceof Ageable) {
@@ -209,30 +286,22 @@ public class FarmingBlock {
         }
     }
 
+
     private void startGrowth(Location cropLocation, long growthInterval){
         World world = cropLocation.getWorld();
         if (world == null) return;
-
-        // --- DIAGNOSTIC LOG ---
-        plugin.getLogger().info("[Minions] Starting/Restarting growth task for " + this.cropType + " at " + cropLocation + " with interval: " + growthInterval + " ticks.");
-        // --- END DIAGNOSTIC LOG ---
-
-
         if(growthTasks.containsKey(cropLocation)) {
             BukkitTask oldTask = growthTasks.get(cropLocation);
             if(oldTask != null && !oldTask.isCancelled()) {
                 oldTask.cancel();
             }
         }
-
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             Block soilBlock = world.getBlockAt(cropLocation.clone().add(0, -1, 0));
             Block cropBlock = world.getBlockAt(cropLocation);
-
             if (soilBlock.getType() != Material.FARMLAND) {
                 soilBlock.setType(Material.FARMLAND);
             }
-
             if (cropBlock.getType() != this.cropType) {
                 if (cropBlock.getType() == Material.AIR) {
                     cropBlock.setType(this.cropType);
@@ -241,14 +310,20 @@ public class FarmingBlock {
                         Ageable ageable = (Ageable) bd;
                         ageable.setAge(0);
                         cropBlock.setBlockData(ageable, true);
+                    } else {
                     }
                     return;
                 } else {
+                    if (growthTasks.containsKey(cropLocation)) {
+                        BukkitTask selfTask = growthTasks.remove(cropLocation);
+                        if (selfTask != null) selfTask.cancel();
+                    }
+                    return;
                 }
             }
 
             BlockData blockData = cropBlock.getBlockData();
-            if (cropBlock.getType() == this.cropType && blockData instanceof Ageable) {
+            if (blockData instanceof Ageable) {
                 Ageable ageable = (Ageable) blockData;
                 int currentAge = ageable.getAge();
                 int maxAge = ageable.getMaximumAge();
@@ -257,54 +332,62 @@ public class FarmingBlock {
                     ageable.setAge(currentAge + 1);
                     cropBlock.setBlockData(ageable, true);
                 } else {
-                    plugin.getLogger().info("Crop (" + cropBlock.getType() + ") at " + cropLocation + " is fully grown. Attempting harvest...");
-
                     Collection<ItemStack> drops = cropBlock.getDrops();
-
                     HashMap<Integer, ItemStack> remaining = storageInventory.addItem(drops.toArray(new ItemStack[0]));
 
                     if (!remaining.isEmpty()) {
-                        plugin.getLogger().warning("Minion storage full at " + center + ". Could not add all drops from " + cropBlock.getType() + " at " + cropLocation + ". Pausing harvest for this spot.");
-                        return;
                     } else {
-                        plugin.getLogger().info("Harvest from " + cropBlock.getType() + " at " + cropLocation + " successfully added to storage. Replanting...");
-
                         cropBlock.setType(Material.AIR);
-
                         cropBlock.setType(this.cropType);
                         BlockData newBd = cropBlock.getBlockData();
                         if (newBd instanceof Ageable) {
                             Ageable newAgeable = (Ageable) newBd;
                             newAgeable.setAge(0);
                             cropBlock.setBlockData(newAgeable, true);
+                        } else {
+                            if (growthTasks.containsKey(cropLocation)) {
+                                BukkitTask selfTask = growthTasks.remove(cropLocation);
+                                if (selfTask != null) selfTask.cancel();
+                            }
                         }
                     }
                 }
             } else {
+                if (growthTasks.containsKey(cropLocation)) {
+                    BukkitTask selfTask = growthTasks.remove(cropLocation);
+                    if (selfTask != null) selfTask.cancel();
+                }
             }
         }, growthInterval, growthInterval);
-
         growthTasks.put(cropLocation, task);
     }
 
     public void restore() {
         long delay;
         if (level == 1) {
-            delay = 10L;
+            delay = 1700L;
         } else {
-            delay = 5L;
+            delay = 1100L;
         }
         World world = center.getWorld();
         if (world == null) return;
 
         cancelGrowthTasks();
 
-        for (int x = -1; x <= 1; x++) {
-            for (int z = -1; z <= 1; z++) {
+        int range = (level == 3) ? 2 : 1;
+
+        for (int x = -range; x <= range; x++) {
+            for (int z = -range; z <= range; z++) {
                 if (x == 0 && z == 0) continue;
 
+                Location soilLocation = center.clone().add(x, 0, z);
+                Block soilBlock = world.getBlockAt(soilLocation);
                 Location cropLocation = center.clone().add(x, 1, z);
                 Block cropBlock = world.getBlockAt(cropLocation);
+
+                if (soilBlock.getType() != Material.FARMLAND) {
+                    soilBlock.setType(Material.FARMLAND);
+                }
 
                 if (cropBlock.getType() == Material.AIR || cropBlock.getType() == this.cropType) {
                     if (cropBlock.getType() == Material.AIR) {
@@ -314,43 +397,67 @@ public class FarmingBlock {
                             Ageable ageable = (Ageable) bd;
                             ageable.setAge(0);
                             cropBlock.setBlockData(ageable, true);
+                        } else {
+                        }
+                    } else {
+                        BlockData bd = cropBlock.getBlockData();
+                        if (bd instanceof Ageable) {
+                            Ageable ageable = (Ageable) bd;
+                            ageable.setAge(0); // Decided to reset age on load for consistency
+                            cropBlock.setBlockData(ageable, true);
+                        } else {
                         }
                     }
                     startGrowth(cropLocation, delay);
                 } else {
-                    plugin.getLogger().warning("Minion at " + center + " found unexpected block type " + cropBlock.getType() + " at crop location " + cropLocation + " during restore. Expected " + this.cropType + " or AIR.");
+                    cropBlock.setType(this.cropType);
+                    BlockData bd = cropBlock.getBlockData();
+                    if (bd instanceof Ageable) {
+                        Ageable ageable = (Ageable) bd;
+                        ageable.setAge(0);
+                        cropBlock.setBlockData(ageable, true);
+                        startGrowth(cropLocation, delay);
+                    } else {
+                    }
                 }
             }
         }
     }
     public void openMainMenu(Player player) {
+        if (owner != null && !player.getUniqueId().equals(owner.getUniqueId())) {
+            player.sendMessage(ChatColor.RED + "Bu farm bloğuna erişim izniniz yok.");
+            return;
+        }
+        if (owner == null) {
+            player.sendMessage(ChatColor.YELLOW + "Farm bloğu sahibi yüklenemedi.");
+        }
         Inventory mainMenuInventory = Bukkit.createInventory(new MinionInventoryHolder(this), 9, ChatColor.GREEN + "Minion Kontrol Paneli");
 
         ItemStack storageIcon = new ItemStack(Material.CHEST);
         ItemMeta storageMeta = storageIcon.getItemMeta();
-        storageMeta.setDisplayName(ChatColor.YELLOW + "Hasatlar");
+        storageMeta.setDisplayName(ChatColor.YELLOW + "Hasatlar Deposu");
         storageIcon.setItemMeta(storageMeta);
-
-        ItemStack cropIcon = new ItemStack(Material.WHEAT_SEEDS);
+        Material cropIconMaterial = BLOCK_TO_ITEM_MAP.getOrDefault(this.cropType, Material.WHEAT_SEEDS);
+        ItemStack cropIcon = new ItemStack(cropIconMaterial);
         ItemMeta cropMeta = cropIcon.getItemMeta();
-        cropMeta.setDisplayName(ChatColor.AQUA + "Ekin Türü Seç");
+        cropMeta.setDisplayName(ChatColor.AQUA + "Ekin Türü Seç (" + cropIconMaterial.name().replace("_SEEDS", "").toLowerCase().replace("_WART", " Wart").replace("_BLOCK", "") + ")");
         cropIcon.setItemMeta(cropMeta);
-
         ItemStack breakIcon = new ItemStack(Material.BARRIER);
         ItemMeta breakMeta = breakIcon.getItemMeta();
         breakMeta.setDisplayName(ChatColor.RED + "Bloğu Kır");
         breakIcon.setItemMeta(breakMeta);
-
-
         mainMenuInventory.setItem(2, storageIcon);
         mainMenuInventory.setItem(4, cropIcon);
         mainMenuInventory.setItem(6, breakIcon);
-
         player.openInventory(mainMenuInventory);
     }
-    public void openCropSelectionMenu(Player player) {
-        Inventory cropSelectionMenu = Bukkit.createInventory(new MinionInventoryHolder(this), 9, ChatColor.AQUA + "Ekin Türü Seç");
 
+    public void openCropSelectionMenu(Player player) {
+        if (owner != null && !player.getUniqueId().equals(owner.getUniqueId())) {
+            player.sendMessage(ChatColor.RED + "Bu menüye erişim izniniz yok.");
+            return;
+        }
+        Inventory cropSelectionMenu = Bukkit.createInventory(new MinionInventoryHolder(this), 9, ChatColor.AQUA + "Ekin Türü Seç");
         ItemStack wheatIcon = new ItemStack(Material.WHEAT);
         ItemMeta wheatMeta = wheatIcon.getItemMeta();
         wheatMeta.setDisplayName(ChatColor.YELLOW + "Wheat");
@@ -365,15 +472,36 @@ public class FarmingBlock {
         ItemMeta potatoMeta = potatoIcon.getItemMeta();
         potatoMeta.setDisplayName(ChatColor.YELLOW + "Potato");
         potatoIcon.setItemMeta(potatoMeta);
-
-
         cropSelectionMenu.setItem(3, wheatIcon);
         cropSelectionMenu.setItem(4, carrotIcon);
         cropSelectionMenu.setItem(5, potatoIcon);
 
         player.openInventory(cropSelectionMenu);
     }
+
     public void openStorageMenu(Player player) {
+        if (owner != null && !player.getUniqueId().equals(owner.getUniqueId())) {
+            player.sendMessage(ChatColor.RED + "Bu depoya erişim izniniz yok.");
+            return;
+        }
+
         player.openInventory(this.storageInventory);
+    }
+
+
+    private ItemStack createMinionItem() {
+        ItemStack minionItem = new ItemStack(Material.END_STONE);
+        ItemMeta meta = minionItem.getItemMeta();
+        if (this.level == 1) {
+            meta.setDisplayName("FarmerSeviye1");
+        } else if (this.level == 2) {
+            meta.setDisplayName("FarmerSeviye2");
+            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+        } else if (this.level == 3) {
+            meta.setDisplayName("FarmerSeviye3");
+            meta.addEnchant(Enchantment.UNBREAKING, 2, true);
+        }
+        minionItem.setItemMeta(meta);
+        return minionItem;
     }
 }

@@ -33,6 +33,11 @@ public class BlockPlaceListener implements Listener {
             farmingBlock = new FarmingBlock(loc, player, 2, Material.WHEAT, plugin);
             farmingBlock.onPlace();
             plugin.registerFarmingBlock(farmingBlock);
+        } else if (displayName.equals("FarmerSeviye3")) {
+            farmingBlock = new FarmingBlock(loc, player, 3, Material.WHEAT, plugin);
+            farmingBlock.onPlace();
+            plugin.registerFarmingBlock(farmingBlock);
+
         }
     }
 }
