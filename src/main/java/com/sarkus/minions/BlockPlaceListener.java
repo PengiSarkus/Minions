@@ -16,19 +16,23 @@ public class BlockPlaceListener implements Listener {
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
         ItemStack item = event.getItemInHand();
+
         if (!(item.hasItemMeta())) return;
-        if (!item.getItemMeta().getDisplayName().startsWith("Farmer")) return;
+        String displayName = item.getItemMeta().getDisplayName();
+        if (displayName == null || (!displayName.startsWith("Farmer"))) return;
+
         Location loc = event.getBlockPlaced().getLocation();
         Player player = event.getPlayer();
-        if(item.getItemMeta().getDisplayName().equals("FarmerSeviye1")) {
-        FarmingBlock farmingBlock = new FarmingBlock(loc, player,1, Material.WHEAT,plugin);
-        farmingBlock.onPlace();}
-        if(item.getItemMeta().getDisplayName().equals("FarmerSeviye2")) {
-            FarmingBlock farmingBlock = new FarmingBlock(loc, player,2, Material.WHEAT,plugin);
-            farmingBlock.onPlace();}
+        FarmingBlock farmingBlock = null;
 
-
-
+        if(displayName.equals("FarmerSeviye1")) {
+            farmingBlock = new FarmingBlock(loc, player, 1, Material.WHEAT, plugin);
+            farmingBlock.onPlace();
+            plugin.registerFarmingBlock(farmingBlock);
+        } else if(displayName.equals("FarmerSeviye2")) {
+            farmingBlock = new FarmingBlock(loc, player, 2, Material.WHEAT, plugin);
+            farmingBlock.onPlace();
+            plugin.registerFarmingBlock(farmingBlock);
+        }
     }
-    }
-
+}
